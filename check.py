@@ -1,3 +1,8 @@
+import sys
+import urllib.request
+import os
+
+
 def main():
     """
     对一个完全未知的Python沙箱环境进行探测（鲁棒版）。
@@ -73,17 +78,21 @@ def main():
         report.append(f"❌  FAILED: Could not list directory contents. Reason: {e}")
 
     # === 4. 网络连接测试 (无变化) ===
-    report.append("\n[4] Network Egress Test")
-    # ... (代码与上一版本相同)
+    # 4.1 高层 HTTPS 测试
+    report.append("    -> Step A: Testing high-level HTTPS request...")
+    https_success = False
     try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(3.0)
-        s.connect(('8.8.8.8', 53))
-        s.close()
-        report.append("✅  SUCCESS: Outbound network connection to 8.8.8.8:53 is allowed.")
-        report.append("    -> Syscalls 'socket', 'connect' are likely permitted.")
+        # 尝试访问百度首页，超时设置为5秒
+        # 添加User-Agent头，模拟浏览器，避免被一些简单的WAF拦截
+        req = urllib.request.Request("https://www.baidu.com", headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=5) as response:
+            if response.status == 200:
+                report.append("    ✅  SUCCESS: Full HTTPS request to https://www.baidu.com (port 443) is allowed.")
+                https_success = True
+            else:
+                report.append(f"    ❓  NEUTRAL: Connection allowed, but received status code {response.status}.")
     except Exception as e:
-        report.append(f"❌  FAILED: Could not establish network connection. Reason: {type(e).__name__} - {e}")
+        report.append(f"    ❌  FAILED: Could not complete HTTPS request. Reason: {type(e).__name__} - {e}")
 
     # === 5. 环境识别 (无变化, 但依赖于文件系统权限) ===
     report.append("\n[5] Containerization Check")
